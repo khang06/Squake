@@ -9,6 +9,7 @@ import net.minecraft.entity.MovementType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
@@ -32,17 +33,11 @@ public class QuakeClientPlayer
 			return false;
 
 		boolean didQuakeMovement;
-		double d0 = player.x;
-		double d1 = player.y;
-		double d2 = player.z;
 
 		if ((player.abilities.flying || player.isFallFlying()) && !player.hasVehicle())
 			return false;
 		else
 			didQuakeMovement = quake_travel(player, movementInput);
-
-		if (didQuakeMovement)
-			player.method_7282(player.x - d0, player.y - d1, player.z - d2);
 
 		return didQuakeMovement;
 	}
@@ -74,7 +69,7 @@ public class QuakeClientPlayer
 		if (!ModConfig.ENABLED)
 			return false;
 
-		if ((player.abilities.flying && !player.hasVehicle()) || player.isInsideWater() || player.isInLava() || !player.abilities.flying)
+		if ((player.abilities.flying && !player.hasVehicle()) || player.isSubmergedIn(FluidTags.WATER) || player.isInLava() || !player.abilities.flying)
 		{
 			return false;
 		}
@@ -123,9 +118,10 @@ public class QuakeClientPlayer
 	{
 		float f2 = 1.0F;
 
-		if (player.onGround)
+		if (player.isOnGround())
 		{
-			BlockPos groundPos = new BlockPos(MathHelper.floor(player.x), MathHelper.floor(player.getBoundingBox().minY) - 1, MathHelper.floor(player.z));
+			Vec3d pos = player.getPos();
+			BlockPos groundPos = new BlockPos(MathHelper.floor(pos.x), MathHelper.floor(player.getBoundingBox().minY) - 1, MathHelper.floor(pos.z));
 			Block ground = player.world.getBlockState(groundPos).getBlock();
 			f2 = 1.0F - ground.getSlipperiness();
 		}
@@ -136,10 +132,11 @@ public class QuakeClientPlayer
 	private static float getSlipperiness(PlayerEntity player)
 	{
 		float f2 = 0.91F;
-		if (player.onGround)
+		if (player.isOnGround())
 		{
 			f2 = 0.54600006F;
-			BlockPos groundPos = new BlockPos(MathHelper.floor(player.x), MathHelper.floor(player.getBoundingBox().minY) - 1, MathHelper.floor(player.z));
+			Vec3d pos = player.getPos();
+			BlockPos groundPos = new BlockPos(MathHelper.floor(pos.x), MathHelper.floor(player.getBoundingBox().minY) - 1, MathHelper.floor(pos.z));
 			Block ground = player.world.getBlockState(groundPos).getBlock();
 
 			f2 = ground.getSlipperiness() * 0.91F;
@@ -196,17 +193,18 @@ public class QuakeClientPlayer
 
 	private static void spawnBunnyhopParticles(PlayerEntity player, int numParticles)
 	{
+		Vec3d pos = player.getPos();
 		// taken from sprint
-		int j = MathHelper.floor(player.x);
-		int i = MathHelper.floor(player.y - 0.20000000298023224D - player.getHeightOffset());
-		int k = MathHelper.floor(player.z);
+		int j = MathHelper.floor(pos.x);
+		int i = MathHelper.floor(pos.y - 0.20000000298023224D - player.getHeightOffset());
+		int k = MathHelper.floor(pos.z);
 		BlockState blockState = player.world.getBlockState(new BlockPos(j, i, k));
 
 		if (blockState.getRenderType() != BlockRenderType.INVISIBLE)
 		{
 			for (int iParticle = 0; iParticle < numParticles; iParticle++)
 			{
-				player.world.addParticle(new BlockStateParticleEffect(ParticleTypes.BLOCK, blockState), player.x + (random.nextFloat() - 0.5D) * player.getWidth(), player.y + 0.1D, player.z + (random.nextFloat() - 0.5D) * player.getWidth(), -player.getVelocity().x * 4.0D, 1.5D, -player.getVelocity().z * 4.0D);
+				player.world.addParticle(new BlockStateParticleEffect(ParticleTypes.BLOCK, blockState), pos.x + (random.nextFloat() - 0.5D) * player.getWidth(), pos.y + 0.1D, pos.z + (random.nextFloat() - 0.5D) * player.getWidth(), -player.getVelocity().x * 4.0D, 1.5D, -player.getVelocity().z * 4.0D);
 			}
 		}
 	}
@@ -233,11 +231,12 @@ public class QuakeClientPlayer
 
 	private static void minecraft_ApplyGravity(PlayerEntity player)
 	{
-		BlockPos pos = new BlockPos((int) player.x, (int) player.y, (int) player.z);
+		Vec3d playerPos = player.getPos();
+		BlockPos pos = new BlockPos((int) playerPos.x, (int) playerPos.y, (int) playerPos.z);
 		double velocityY = player.getVelocity().y;
-		if (player.world.isClient && !player.world.isBlockLoaded(pos))
+		if (player.world.isClient && !player.world.isChunkLoaded(pos))
 		{
-			if (player.y > 0.0D)
+			if (playerPos.y > 0.0D)
 			{
 				velocityY = -0.1D;
 			}
@@ -317,8 +316,9 @@ public class QuakeClientPlayer
 	private static void minecraft_SwingLimbsBasedOnMovement(PlayerEntity player)
 	{
 		player.lastLimbDistance = player.limbDistance;
-		double d0 = player.x - player.prevX;
-		double d1 = player.z - player.prevZ;
+		Vec3d pos = player.getPos();
+		double d0 = pos.x - player.prevX;
+		double d1 = pos.z - player.prevZ;
 		float f6 = MathHelper.sqrt(d0 * d0 + d1 * d1) * 4.0F;
 
 		if (f6 > 1.0F)
@@ -405,21 +405,19 @@ public class QuakeClientPlayer
 		{
 			return false;
 		}
-		else if (player.isInsideWater() && !player.abilities.flying)
+		else if (player.isSubmergedInWater() && !player.abilities.flying)
 		{
-			//			if (ModConfig.SHARKING_ENABLED)
-			//				quake_WaterMove(player, (float) movementInput.x, (float) movementInput.y, (float) movementInput.z);
-			//			else
-			//			{
-			return false;
-			//			}
+			if (ModConfig.SHARKING_ENABLED)
+				quake_WaterMove(player, (float) movementInput.x, (float) movementInput.y, (float) movementInput.z);
+			else
+				return false;
 		}
 		else
 		{
 			// get all relevant movement values
 			float wishspeed = (movementInput.x != 0.0D || movementInput.z != 0.0D) ? quake_getMoveSpeed(player) : 0.0F;
 			double[] wishdir = getMovementDirection(player, movementInput.x, movementInput.z);
-			boolean onGroundForReal = player.onGround && !isJumping(player);
+			boolean onGroundForReal = player.isOnGround() && !isJumping(player);
 			float momentumRetention = getSlipperiness(player);
 
 			// ground movement
@@ -455,6 +453,7 @@ public class QuakeClientPlayer
 				double sv_airaccelerate = ModConfig.AIR_ACCELERATE;
 				quake_AirAccelerate(player, wishspeed, wishdir[0], wishdir[1], sv_airaccelerate);
 
+				/*
 				if (ModConfig.SHARKING_ENABLED && ModConfig.SHARKING_SURFACE_TENSION > 0.0D && isJumping(player) && player.getVelocity().y < 0.0F)
 				{
 					Box axisalignedbb = player.getBoundingBox().offset(player.getVelocity());
@@ -463,6 +462,7 @@ public class QuakeClientPlayer
 					if (isFallingIntoWater)
 						player.setVelocity(player.getVelocity().multiply(1.0D, ModConfig.SHARKING_SURFACE_TENSION, 1.0D));
 				}
+				*/
 			}
 
 			// apply velocity
@@ -566,12 +566,13 @@ public class QuakeClientPlayer
 
 	private static void quake_WaterMove(PlayerEntity player, float sidemove, float upmove, float forwardmove)
 	{
-		double lastPosY = player.y;
+		Vec3d pos = player.getPos();
+		double lastPosY = pos.y;
 
 		// get all relevant movement values
 		float wishspeed = (sidemove != 0.0F || forwardmove != 0.0F) ? quake_getMaxMoveSpeed(player) : 0.0F;
 		double[] wishdir = getMovementDirection(player, sidemove, forwardmove);
-		boolean isOffsetInLiquid = player.world.getBlockState(new BlockPos(player.x, player.y + 1.0D, player.z)).getFluidState().isEmpty();
+		boolean isOffsetInLiquid = player.world.getBlockState(new BlockPos(pos.x, pos.y + 1.0D, pos.z)).getFluidState().isEmpty();
 		boolean isSharking = isJumping(player) && isOffsetInLiquid;
 		double curspeed = getSpeed(player);
 
@@ -595,7 +596,7 @@ public class QuakeClientPlayer
 		}
 
 		// water jump
-		if (player.horizontalCollision && player.doesNotCollide(player.getVelocity().x, player.getVelocity().y + 0.6000000238418579D - player.y + lastPosY, player.getVelocity().z))
+		if (player.horizontalCollision && player.doesNotCollide(player.getVelocity().x, player.getVelocity().y + 0.6000000238418579D - pos.y + lastPosY, player.getVelocity().z))
 		{
 			player.setVelocity(player.getVelocity().x, 0.30000001192092896D, player.getVelocity().z);
 		}

@@ -10,7 +10,7 @@ import squeek.quakemovement.ModQuakeMovement;
 @Mixin(InGameHud.class)
 public class TestSpeedometerMixin
 {
-	@Inject(at = @At("HEAD"), method = "renderStatusEffectOverlay()V")
+	@Inject(at = @At("HEAD"), method = "renderStatusEffectOverlay")
 	private void renderStatusEffectOverlay(CallbackInfo info)
 	{
 		ModQuakeMovement.drawSpeedometer();
